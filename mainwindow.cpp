@@ -6,6 +6,9 @@
 #include <QMessageBox>
 #include <QTextStream>
 #include <QStyle>
+#include <QFontDialog>
+#include <QColorDialog>
+#include <QClipboard>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -47,7 +50,29 @@ MainWindow::MainWindow(QWidget *parent)
         updateWindowTitle();
     });
 
+    // ---- 编辑类 Action 的使能状态与编辑状态保持一致 ----
+    connect(ui->textEdit, &QPlainTextEdit::copyAvailable,
+            ui->actionCut, &QAction::setEnabled);           // 有选中才可剪切/复制
+    connect(ui->textEdit, &QPlainTextEdit::copyAvailable,
+            ui->actionCopy, &QAction::setEnabled);
+    connect(ui->textEdit, &QPlainTextEdit::undoAvailable,
+            ui->actionUndo, &QAction::setEnabled);
+    connect(ui->textEdit, &QPlainTextEdit::redoAvailable,
+            ui->actionRedo, &QAction::setEnabled);
+    // 剪贴板有文本才可粘贴
+    connect(QApplication::clipboard(), &QClipboard::dataChanged, this, [this]{
+        const QString t = QApplication::clipboard()->text();
+        ui->actionPaste->setEnabled(!t.isEmpty());
+    });
+    // 初始使能状态
+    ui->actionCut->setEnabled(false);
+    ui->actionCopy->setEnabled(false);
+    ui->actionUndo->setEnabled(false);
+    ui->actionRedo->setEnabled(false);
+    ui->actionPaste->setEnabled(!QApplication::clipboard()->text().isEmpty());
+
     updateWindowTitle();
+    applyEditorStyle();
 }
 
 MainWindow::~MainWindow()
@@ -192,20 +217,81 @@ void MainWindow::updateStatusLabels()
                                    .arg(c.columnNumber() + 1));
 }
 
-// 编辑/格式等功能将在后续提交中实现
-void MainWindow::on_actionUndo_triggered()     {}
-void MainWindow::on_actionRedo_triggered()     {}
-void MainWindow::on_actionCut_triggered()      {}
-void MainWindow::on_actionCopy_triggered()     {}
-void MainWindow::on_actionPaste_triggered()    {}
-void MainWindow::on_actionSelectAll_triggered(){}
-void MainWindow::on_actionFont_triggered()     {}
-void MainWindow::on_actionFontColor_triggered()        {}
-void MainWindow::on_actionBackgroundColor_triggered()  {}
-void MainWindow::on_actionLineWrap_triggered(bool)     {}
-void MainWindow::on_actionShowToolbar_triggered(bool checked) { ui->toolBar->setVisible(checked); }
-void MainWindow::on_actionShowStatusbar_triggered(bool checked) { ui->statusbar->setVisible(checked); }
+// ======================================================================
+// 编辑操作：直接复用 QPlainTextEdit 提供的槽
+// ======================================================================
+void MainWindow::on_actionUndo_triggered()     { ui->textEdit->undo(); }
+void MainWindow::on_actionRedo_triggered()     { ui->textEdit->redo(); }
+void MainWindow::on_actionCut_triggered()      { ui->textEdit->cut(); }
+void MainWindow::on_actionCopy_triggered()     { ui->textEdit->copy(); }
+void MainWindow::on_actionPaste_triggered()    { ui->textEdit->paste(); }
+void MainWindow::on_actionSelectAll_triggered(){ ui->textEdit->selectAll(); }
+
+// ======================================================================
+// 格式：字体、字体颜色、背景色、自动换行
+// ======================================================================
+void MainWindow::on_actionFont_triggered()
+{
+    bool ok = false;
+    const QFont font = QFontDialog::getFont(&ok, ui->textEdit->font(), this,
+                                            QStringLiteral("选择字体"));
+    if (ok)
+        ui->textEdit->setFont(font);
+}
+
+void MainWindow::on_actionFontColor_triggered()
+{
+    const QColor color = QColorDialog::getColor(QColor(m_textColor), this,
+                                                QStringLiteral("选择字体颜色"));
+    if (color.isValid()) {
+        m_textColor = color.name();
+        applyEditorStyle();
+    }
+}
+
+void MainWindow::on_actionBackgroundColor_triggered()
+{
+    const QColor color = QColorDialog::getColor(QColor(m_bgColor), this,
+                                                QStringLiteral("选择背景色"));
+    if (color.isValid()) {
+        m_bgColor = color.name();
+        applyEditorStyle();
+    }
+}
+
+void MainWindow::applyEditorStyle()
+{
+    // 同时维护字体颜色与背景色，避免互相覆盖
+    ui->textEdit->setStyleSheet(QStringLiteral(
+        "QPlainTextEdit {"
+        "  color: %1;"
+        "  background-color: %2;"
+        "  selection-background-color: #3399ff;"
+        "}").arg(m_textColor, m_bgColor));
+}
+
+void MainWindow::on_actionLineWrap_triggered(bool checked)
+{
+    ui->textEdit->setLineWrapMode(checked ? QPlainTextEdit::WidgetWidth
+                                          : QPlainTextEdit::NoWrap);
+}
+
+// ======================================================================
+// 视图：工具栏/状态栏 显示与隐藏（行号待 CodeEditor 类实现）
+// ======================================================================
+void MainWindow::on_actionShowToolbar_triggered(bool checked)
+{
+    ui->toolBar->setVisible(checked);
+}
+
+void MainWindow::on_actionShowStatusbar_triggered(bool checked)
+{
+    ui->statusbar->setVisible(checked);
+}
+
 void MainWindow::on_actionShowLineNumbers_triggered(bool) {}
+
+// 查找/替换/关于对话框将在后续提交接入
 void MainWindow::on_actionSearch_triggered()  {}
 void MainWindow::on_actionReplace_triggered() {}
 void MainWindow::on_actionAutoSave_triggered(bool) {}
