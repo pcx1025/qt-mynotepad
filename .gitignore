@@ -1,0 +1,17 @@
+# 构建产物
+debug/
+release/
+*.o
+*.obj
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+Makefile*
+.qmake.stash
+build-*/
+# IDE
+.qtcreator/
+.qtc_clangd/
+*.pro.user
+*~
